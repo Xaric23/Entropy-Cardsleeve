@@ -44,7 +44,7 @@ local function with_deterministic_random(fn)
     local original_random = math.random
     -- Deterministic values keep tests stable: choose first index for ranged calls,
     -- return 1 for single-bound calls, and 0 for probability checks so
-    -- "math.random() < chance" behaves predictably for non-zero chances.
+    -- "math.random() < chance" is true whenever chance > 0.
     math.random = function(a, b)
         if a and b then return a end
         if a then return 1 end
@@ -175,6 +175,9 @@ run_test("startup sanitization removes invalid editions", function()
     assert_eq(#G.P_CENTER_POOLS.Edition, 2, "expected only valid editions")
     assert_eq(G.P_CENTER_POOLS.Edition[1].key, "e_foil")
     assert_eq(G.P_CENTER_POOLS.Edition[2].key, "e_negative")
+    for _, edition in ipairs(G.P_CENTER_POOLS.Edition) do
+        assert_true(edition.key ~= "e_holo", "entries without e_switch_point must be removed")
+    end
 end)
 
 run_test("enhancement pool excludes stone enhancement", function()
