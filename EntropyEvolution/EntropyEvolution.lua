@@ -343,3 +343,32 @@ CardSleeves.Sleeve {
         return {vars = {}}
     end
 }
+
+if rawget(_G, "__ENTROPY_TESTING") then
+    _G.__ENTROPY_TEST_EXPORTS = {
+        sanitize_editions_startup = sanitize_editions_startup,
+        build_seal_pool = build_seal_pool,
+        build_enhancement_pool = build_enhancement_pool,
+        build_edition_pool = build_edition_pool,
+        propagate_modifiers = propagate_modifiers,
+        inherit_modifier = inherit_modifier,
+        apply_card_modifiers = apply_card_modifiers,
+        apply_joker_modifiers = apply_joker_modifiers,
+        apply_hand_resonance = apply_hand_resonance,
+        get_joker_mutation_chance = get_joker_mutation_chance,
+        get_pools = get_pools,
+        constants = {
+            propagation_history_limit = PROPAGATION_HISTORY_LIMIT
+        },
+        reset_state = function()
+            PROPAGATED_MODIFIERS = {}
+            CACHED_POOLS = nil
+        end,
+        get_state = function()
+            return {
+                propagated_count = #PROPAGATED_MODIFIERS,
+                cached_pools = CACHED_POOLS
+            }
+        end
+    }
+end
