@@ -409,7 +409,8 @@ run_test("lovely manifest defines patches field", function()
     local content = file:read("*a")
     file:close()
 
-    local has_patches_field = content:match("(^|\n)patches%s*=") ~= nil
+    local has_patches_field = content:match("^patches%s*=") ~= nil
+        or content:match("\npatches%s*=") ~= nil
         or content:match("%[%[patches%]%]") ~= nil
 
     assert_true(has_patches_field, "lovely.toml must define a patches field/table for lovely-injector")
