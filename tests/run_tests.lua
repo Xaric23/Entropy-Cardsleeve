@@ -138,7 +138,6 @@ run_test("startup sanitization removes invalid editions", function()
         { key = "e_base", e_switch_point = 1 },
         { key = "e_holo" },
         { key = 123, e_switch_point = 1 },
-        nil,
         { key = "e_negative", e_switch_point = 2 }
     }
 
