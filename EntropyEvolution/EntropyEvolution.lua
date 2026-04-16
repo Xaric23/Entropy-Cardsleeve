@@ -64,7 +64,7 @@ local EDITIONS_BASE = {"foil", "holo", "polychrome", "negative"}
 local PROPAGATION_HISTORY_LIMIT = 50
 local JOKER_MUTATION_BASE_CHANCE = 0.15
 local JOKER_MUTATION_MEMORY_SCALING = 0.004
-local JOKER_MUTATION_MEMORY_CAP = 0.2
+local JOKER_MUTATION_MAX_BONUS = 0.2
 local HAND_RESONANCE_CHANCE = 0.12
 local HAND_RESONANCE_MAX_CARDS = 2
 local CARD_SET_DEFAULT = "Default"
@@ -229,7 +229,8 @@ local function apply_joker_modifiers(joker)
 end
 
 local function get_joker_mutation_chance()
-    local memory_bonus = math.min(#PROPAGATED_MODIFIERS * JOKER_MUTATION_MEMORY_SCALING, JOKER_MUTATION_MEMORY_CAP)
+    -- Mutation chance = base + min(memory_size * scaling, max_bonus)
+    local memory_bonus = math.min(#PROPAGATED_MODIFIERS * JOKER_MUTATION_MEMORY_SCALING, JOKER_MUTATION_MAX_BONUS)
     return JOKER_MUTATION_BASE_CHANCE + memory_bonus
 end
 
