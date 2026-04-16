@@ -221,17 +221,26 @@ end)
 
 run_test("joker mutation chance scales and caps", function()
     exports.reset_state()
-    assert_eq(exports.get_joker_mutation_chance(), 0.15)
+
+    local function assert_approx_eq(actual, expected, epsilon, message)
+        if math.abs(actual - expected) > epsilon then
+            error((message or "values are not approximately equal")
+                .. ": expected " .. tostring(expected)
+                .. ", got " .. tostring(actual))
+        end
+    end
+
+    assert_approx_eq(exports.get_joker_mutation_chance(), 0.15, 1e-9, "initial mutation chance should match")
 
     for i = 1, 25 do
         exports.propagate_modifiers("ed", "seal", "enh")
     end
-    assert_eq(exports.get_joker_mutation_chance(), 0.25)
+    assert_approx_eq(exports.get_joker_mutation_chance(), 0.25, 1e-9, "mutation chance should scale after propagation")
 
     for i = 1, 200 do
         exports.propagate_modifiers("ed", "seal", "enh")
     end
-    assert_eq(exports.get_joker_mutation_chance(), 0.35)
+    assert_approx_eq(exports.get_joker_mutation_chance(), 0.35, 1e-9, "mutation chance should cap at the maximum")
 end)
 
 run_test("hand resonance mutates at most two default cards", function()
