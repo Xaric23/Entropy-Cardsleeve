@@ -364,7 +364,7 @@ local function apply_card_modifiers(card)
 
     -- Edition selection with weighted pools
     local edition = inherit_modifier("edition")
-    if math.random() < (CONFIG.edition_override_chance + streak_bonus) then
+    if math.random() < clamp(CONFIG.edition_override_chance + streak_bonus, 0, 1) then
         edition = select_weighted_edition()
     end
     edition = edition or select_weighted_edition()
@@ -437,12 +437,12 @@ local function apply_joker_modifiers(joker)
 
     -- Break inheritance with adjusted chance
     local edition = inherit_modifier("edition")
-    if math.random() < (CONFIG.joker_inheritance_break_chance - streak_bonus) then
+    if math.random() < clamp(CONFIG.joker_inheritance_break_chance - streak_bonus, 0, 1) then
         edition = nil
     end
 
     edition = edition or select_weighted_edition()
-    if math.random() < CONFIG.joker_edition_override_chance then
+    if math.random() < clamp(CONFIG.joker_edition_override_chance, 0, 1) then
         edition = select_weighted_edition()
     end
 
@@ -465,7 +465,7 @@ local function get_joker_mutation_chance()
         #PROPAGATED_MODIFIERS * CONFIG.joker_mutation_memory_scaling,
         CONFIG.joker_mutation_max_bonus
     )
-    return CONFIG.joker_mutation_base_chance + memory_bonus + get_streak_bonus()
+    return clamp(CONFIG.joker_mutation_base_chance + memory_bonus + get_streak_bonus(), 0, 1)
 end
 
 local function apply_hand_resonance()
@@ -474,7 +474,7 @@ local function apply_hand_resonance()
     local mutated = 0
     for _, card in ipairs(G.hand.cards) do
         if mutated >= CONFIG.hand_resonance_max_cards then break end
-        local adjusted_chance = CONFIG.hand_resonance_chance + get_streak_bonus()
+        local adjusted_chance = clamp(CONFIG.hand_resonance_chance + get_streak_bonus(), 0, 1)
         if card.ability and card.ability.set == CARD_SET_DEFAULT and math.random() < adjusted_chance then
             if apply_card_modifiers(card) then
                 mutated = mutated + 1

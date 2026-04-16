@@ -48,7 +48,7 @@ Enable `CONFIG.debug_mode = true` in the Lua file for detailed logging.
 All parameters are tunable in the `CONFIG` table at the top of `EntropyEvolution.lua`:
 
 ```lua
-CONFIG = {
+local CONFIG = {
     -- Core chances
     edition_override_chance = 0.2,
     seal_override_chance = 0.3,

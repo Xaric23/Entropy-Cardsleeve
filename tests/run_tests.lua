@@ -30,7 +30,7 @@ end
 
 local function assert_approx_eq(actual, expected, epsilon, message)
     if math.abs(actual - expected) > epsilon then
-        error((message or "values are not approximately equal")
+        fail((message or "values are not approximately equal")
             .. ": expected " .. tostring(expected)
             .. ", got " .. tostring(actual))
     end
