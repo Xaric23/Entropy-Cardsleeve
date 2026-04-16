@@ -1,6 +1,6 @@
 local script_path = debug.getinfo(1, "S").source:sub(2)
 script_path = script_path:gsub("\\", "/")
-if script_path:sub(1, 1) ~= "/" and not script_path:match("^%a:[/]") then
+if script_path:sub(1, 1) ~= "/" and not script_path:match("^%a:[/\\]") then
     local cwd = (os.getenv("PWD") or "."):gsub("\\", "/")
     script_path = cwd .. "/" .. script_path
 end
@@ -43,7 +43,7 @@ end
 local function with_deterministic_random(fn)
     local original_random = math.random
     -- Deterministic values keep tests stable: choose first index for ranged calls,
-    -- a constant for single-bound calls, and 0 for probability checks so
+    -- return 1 for single-bound calls, and 0 for probability checks so
     -- "math.random() < chance" behaves predictably for non-zero chances.
     math.random = function(a, b)
         if a and b then return a end
@@ -207,7 +207,7 @@ end)
 
 run_test("propagation history is capped", function()
     exports.reset_state()
-    local history_limit = 50
+    local history_limit = exports.constants.propagation_history_limit
     local inserts = history_limit + 10
     for i = 1, inserts do
         exports.propagate_modifiers("ed" .. i, "seal" .. i, "enh" .. i)

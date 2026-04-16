@@ -357,6 +357,9 @@ if rawget(_G, "__ENTROPY_TESTING") then
         apply_hand_resonance = apply_hand_resonance,
         get_joker_mutation_chance = get_joker_mutation_chance,
         get_pools = get_pools,
+        constants = {
+            propagation_history_limit = PROPAGATION_HISTORY_LIMIT
+        },
         reset_state = function()
             PROPAGATED_MODIFIERS = {}
             CACHED_POOLS = nil
