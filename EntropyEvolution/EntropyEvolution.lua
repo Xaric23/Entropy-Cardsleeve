@@ -61,6 +61,12 @@ local PROPAGATED_MODIFIERS = {}
 local CACHED_POOLS = nil
 
 local EDITIONS_BASE = {"foil", "holo", "polychrome", "negative"}
+local PROPAGATION_HISTORY_LIMIT = 50
+local JOKER_MUTATION_BASE_CHANCE = 0.15
+local JOKER_MUTATION_MEMORY_SCALING = 0.005
+local JOKER_MUTATION_MEMORY_CAP = 0.2
+local HAND_RESONANCE_CHANCE = 0.12
+local HAND_RESONANCE_MAX_CARDS = 2
 
 --------------------------------------------------
 -- HELPERS
@@ -146,7 +152,7 @@ local function propagate_modifiers(edition, seal, enhancement)
         seal = seal,
         enhancement = enhancement
     })
-    if #PROPAGATED_MODIFIERS > 50 then table.remove(PROPAGATED_MODIFIERS, 1) end
+    if #PROPAGATED_MODIFIERS > PROPAGATION_HISTORY_LIMIT then table.remove(PROPAGATED_MODIFIERS, 1) end
 end
 
 --------------------------------------------------
@@ -221,6 +227,24 @@ local function apply_joker_modifiers(joker)
     if ok then propagate_modifiers(edition, nil, nil) end
 end
 
+local function get_joker_mutation_chance()
+    local memory_bonus = math.min(JOKER_MUTATION_MEMORY_CAP, #PROPAGATED_MODIFIERS * JOKER_MUTATION_MEMORY_SCALING)
+    return JOKER_MUTATION_BASE_CHANCE + memory_bonus
+end
+
+local function apply_hand_resonance()
+    if not G.hand or not G.hand.cards then return end
+
+    local mutated = 0
+    for _, card in ipairs(G.hand.cards) do
+        if mutated >= HAND_RESONANCE_MAX_CARDS then break end
+        if card.ability and card.ability.set == "Default" and math.random() < HAND_RESONANCE_CHANCE then
+            apply_card_modifiers(card)
+            mutated = mutated + 1
+        end
+    end
+end
+
 --------------------------------------------------
 -- ATLAS
 --------------------------------------------------
@@ -280,6 +304,7 @@ CardSleeves.Sleeve {
 
         -- FAST END-OF-ROUND MUTATION + BURST ANIMATION
         if context.end_of_round and not context.game_over then
+            CACHED_POOLS = nil
             if G.discard and G.discard.cards then
 
                 for _, card in ipairs(G.discard.cards) do
@@ -299,13 +324,16 @@ CardSleeves.Sleeve {
 
         -- FAST JOKER EVOLUTION
         if context.setting_blind and not context.blueprint then
+            CACHED_POOLS = nil
+            local joker_mutation_chance = get_joker_mutation_chance()
             if G.jokers and G.jokers.cards then
                 for _, joker in ipairs(G.jokers.cards) do
-                    if not joker.edition and math.random() < 0.15 then
+                    if not joker.edition and math.random() < joker_mutation_chance then
                         apply_joker_modifiers(joker)
                     end
                 end
             end
+            apply_hand_resonance()
         end
     end,
 
