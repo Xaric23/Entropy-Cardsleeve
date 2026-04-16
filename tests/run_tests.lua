@@ -1,8 +1,7 @@
 local script_path = debug.getinfo(1, "S").source:sub(2)
-if script_path:sub(1, 1) ~= "/" then
-    local pwd_handle = io.popen("pwd")
-    local cwd = pwd_handle and pwd_handle:read("*l") or ""
-    if pwd_handle then pwd_handle:close() end
+script_path = script_path:gsub("\\", "/")
+if script_path:sub(1, 1) ~= "/" and not script_path:match("^%a:[/]") then
+    local cwd = (os.getenv("PWD") or "."):gsub("\\", "/")
     script_path = cwd .. "/" .. script_path
 end
 local repo_root = script_path:match("^(.*)/tests/run_tests%.lua$")
@@ -43,6 +42,8 @@ end
 
 local function with_deterministic_random(fn)
     local original_random = math.random
+    -- Deterministic values keep tests stable: choose first index for ranged calls,
+    -- a constant for single-bound calls, and always pass probability checks.
     math.random = function(a, b)
         if a and b then return a end
         if a then return 1 end
@@ -163,6 +164,8 @@ run_test("startup sanitization removes invalid editions", function()
         { key = "e_base", e_switch_point = 1 },
         { key = "e_holo" },
         { key = 123, e_switch_point = 1 },
+        { key = false, e_switch_point = 1 },
+        { key = {}, e_switch_point = 1 },
         { key = "e_negative", e_switch_point = 2 }
     }
 
