@@ -1,6 +1,56 @@
 -- ============================================================
---  ENTROPY EVOLUTION (FAST MODE + BURST ANIMATION + CRASH FIX)
+--  ENTROPY EVOLUTION (ENHANCED VERSION)
+--  Features: Config System, Weighted Rarities, Streak Bonuses,
+--            Combo System, Debug Mode, Improved Balance
 -- ============================================================
+
+--------------------------------------------------
+--  CONFIGURATION SYSTEM
+--------------------------------------------------
+local CONFIG = {
+    -- Core chances
+    edition_override_chance = 0.2,
+    seal_override_chance = 0.3,
+    enhancement_override_chance = 0.4,
+    joker_inheritance_break_chance = 0.5,
+    joker_edition_override_chance = 0.3,
+
+    -- Mutation settings
+    joker_mutation_base_chance = 0.15,
+    joker_mutation_memory_scaling = 0.004,
+    joker_mutation_max_bonus = 0.2,
+
+    -- Hand resonance
+    hand_resonance_chance = 0.12,
+    hand_resonance_max_cards = 2,
+
+    -- Streak system
+    streak_bonus_per_level = 0.02,
+    streak_max_bonus = 0.15,
+    streak_decay_chance = 0.3,
+
+    -- Evolution tracking
+    propagation_history_limit = 50,
+
+    -- Debug mode
+    debug_mode = false,
+
+    -- Weighted edition pools (higher weight = more common)
+    edition_weights = {
+        foil = 40,
+        holo = 30,
+        polychrome = 20,
+        negative = 10
+    },
+
+    -- Combo bonuses (synergistic modifier pairs)
+    combo_bonuses = {
+        { edition = "polychrome", seal = "Gold", bonus_mult = 1.5 },
+        { edition = "negative", enhancement = "m_glass", bonus_mult = 1.3 },
+        { edition = "holo", seal = "Red", bonus_mult = 1.2 },
+        { seal = "Purple", enhancement = "m_lucky", bonus_mult = 1.4 }
+    }
+}
 
 --------------------------------------------------
 --  GLOBAL FAILSAFE: PATCH number_format TO PREVENT CRASHES
@@ -8,19 +58,25 @@
 local _orig_number_format = number_format
 
 number_format = function(num, ...)
-    -- If original isn't ready yet, just stringify
     if type(_orig_number_format) ~= "function" then
         return tostring(num)
     end
 
-    -- If something upstream passes garbage, don't crash
     local ok, result = pcall(_orig_number_format, num, ...)
     if ok and result ~= nil then
         return result
     end
 
-    -- Fallback: plain string
     return tostring(num)
+end
+
+--------------------------------------------------
+--  DEBUG LOGGING
+--------------------------------------------------
+local function debug_log(...)
+    if CONFIG.debug_mode then
+        print("[EntropyEvolution]", ...)
+    end
 end
 
 --------------------------------------------------
@@ -39,7 +95,7 @@ local function sanitize_editions_startup()
         then
             table.insert(cleaned, center)
         else
-            print("EntropyEvolution: Removed invalid edition at startup:", center and center.key)
+            debug_log("Removed invalid edition at startup:", center and center.key)
         end
     end
 
@@ -49,9 +105,8 @@ end
 sanitize_editions_startup()
 
 --------------------------------------------------
---  ENTROPY EVOLUTION SYSTEM
+--  ENTROPY EVOLUTION STATE
 --------------------------------------------------
-
 local mod = SMODS.current_mod
 
 local INCLUDE_BASE_GAME = true
@@ -59,14 +114,17 @@ local INCLUDE_MODDED = true
 
 local PROPAGATED_MODIFIERS = {}
 local CACHED_POOLS = nil
+local EVOLUTION_STATS = {
+    total_mutations = 0,
+    current_streak = 0,
+    best_streak = 0,
+    combos_triggered = 0,
+    editions_applied = {},
+    seals_applied = {},
+    enhancements_applied = {}
+}
 
 local EDITIONS_BASE = {"foil", "holo", "polychrome", "negative"}
-local PROPAGATION_HISTORY_LIMIT = 50
-local JOKER_MUTATION_BASE_CHANCE = 0.15
-local JOKER_MUTATION_MEMORY_SCALING = 0.004
-local JOKER_MUTATION_MAX_BONUS = 0.2
-local HAND_RESONANCE_CHANCE = 0.12
-local HAND_RESONANCE_MAX_CARDS = 2
 local CARD_SET_DEFAULT = "Default"
 
 --------------------------------------------------
@@ -75,6 +133,108 @@ local CARD_SET_DEFAULT = "Default"
 local function rand(tbl)
     if not tbl or #tbl == 0 then return nil end
     return tbl[math.random(1, #tbl)]
+end
+
+local function weighted_random(weights)
+    local total = 0
+    for _, weight in pairs(weights) do
+        total = total + weight
+    end
+
+    local roll = math.random() * total
+    local cumulative = 0
+
+    for key, weight in pairs(weights) do
+        cumulative = cumulative + weight
+        if roll <= cumulative then
+            return key
+        end
+    end
+
+    -- Fallback
+    for key, _ in pairs(weights) do
+        return key
+    end
+end
+
+local function clamp(value, min_val, max_val)
+    return math.max(min_val, math.min(max_val, value))
+end
+
+--------------------------------------------------
+-- STREAK SYSTEM
+--------------------------------------------------
+local function update_streak(success)
+    if success then
+        EVOLUTION_STATS.current_streak = EVOLUTION_STATS.current_streak + 1
+        if EVOLUTION_STATS.current_streak > EVOLUTION_STATS.best_streak then
+            EVOLUTION_STATS.best_streak = EVOLUTION_STATS.current_streak
+        end
+        debug_log("Streak increased to", EVOLUTION_STATS.current_streak)
+    else
+        if math.random() < CONFIG.streak_decay_chance then
+            EVOLUTION_STATS.current_streak = math.max(0, EVOLUTION_STATS.current_streak - 1)
+            debug_log("Streak decayed to", EVOLUTION_STATS.current_streak)
+        end
+    end
+end
+
+local function get_streak_bonus()
+    local bonus = EVOLUTION_STATS.current_streak * CONFIG.streak_bonus_per_level
+    return clamp(bonus, 0, CONFIG.streak_max_bonus)
+end
+
+--------------------------------------------------
+-- COMBO SYSTEM
+--------------------------------------------------
+local function check_combo(edition, seal, enhancement)
+    for _, combo in ipairs(CONFIG.combo_bonuses) do
+        local matches = true
+
+        if combo.edition and combo.edition ~= edition then matches = false end
+        if combo.seal and combo.seal ~= seal then matches = false end
+        if combo.enhancement and combo.enhancement ~= enhancement then matches = false end
+
+        -- Need at least 2 matching components
+        local component_count = 0
+        if combo.edition then component_count = component_count + 1 end
+        if combo.seal then component_count = component_count + 1 end
+        if combo.enhancement then component_count = component_count + 1 end
+
+        if matches and component_count >= 2 then
+            EVOLUTION_STATS.combos_triggered = EVOLUTION_STATS.combos_triggered + 1
+            debug_log("Combo triggered!", edition, seal, enhancement, "Bonus:", combo.bonus_mult)
+            return combo.bonus_mult
+        end
+    end
+    return 1.0
+end
+
+--------------------------------------------------
+-- STATS TRACKING
+--------------------------------------------------
+local function track_mutation(edition, seal, enhancement)
+    EVOLUTION_STATS.total_mutations = EVOLUTION_STATS.total_mutations + 1
+
+    if edition then
+        EVOLUTION_STATS.editions_applied[edition] = (EVOLUTION_STATS.editions_applied[edition] or 0) + 1
+    end
+    if seal then
+        EVOLUTION_STATS.seals_applied[seal] = (EVOLUTION_STATS.seals_applied[seal] or 0) + 1
+    end
+    if enhancement then
+        EVOLUTION_STATS.enhancements_applied[enhancement] = (EVOLUTION_STATS.enhancements_applied[enhancement] or 0) + 1
+    end
+end
+
+local function get_evolution_stats()
+    return {
+        total_mutations = EVOLUTION_STATS.total_mutations,
+        current_streak = EVOLUTION_STATS.current_streak,
+        best_streak = EVOLUTION_STATS.best_streak,
+        combos_triggered = EVOLUTION_STATS.combos_triggered,
+        streak_bonus = get_streak_bonus()
+    }
 end
 
 --------------------------------------------------
@@ -113,9 +273,9 @@ local function build_enhancement_pool()
     return enhancements
 end
 
--- VALIDATED EDITION POOL
 local function build_edition_pool()
     local editions = {}
+    local edition_weights = {}
 
     if G.P_CENTER_POOLS and G.P_CENTER_POOLS.Edition then
         for _, center in ipairs(G.P_CENTER_POOLS.Edition) do
@@ -126,19 +286,24 @@ local function build_edition_pool()
             and center.e_switch_point ~= nil
             then
                 local ed = center.key:gsub("^e_", "")
-                if ed ~= "" then table.insert(editions, ed) end
+                if ed ~= "" then
+                    table.insert(editions, ed)
+                    edition_weights[ed] = CONFIG.edition_weights[ed] or 25
+                end
             end
         end
     end
 
-    -- Ensure base editions exist
     local exists = {}
     for _, ed in ipairs(editions) do exists[ed] = true end
     for _, ed in ipairs(EDITIONS_BASE) do
-        if not exists[ed] then table.insert(editions, ed) end
+        if not exists[ed] then
+            table.insert(editions, ed)
+            edition_weights[ed] = CONFIG.edition_weights[ed] or 25
+        end
     end
 
-    return editions
+    return editions, edition_weights
 end
 
 --------------------------------------------------
@@ -156,7 +321,9 @@ local function propagate_modifiers(edition, seal, enhancement)
         seal = seal,
         enhancement = enhancement
     })
-    if #PROPAGATED_MODIFIERS > PROPAGATION_HISTORY_LIMIT then table.remove(PROPAGATED_MODIFIERS, 1) end
+    if #PROPAGATED_MODIFIERS > CONFIG.propagation_history_limit then
+        table.remove(PROPAGATED_MODIFIERS, 1)
+    end
 end
 
 --------------------------------------------------
@@ -164,46 +331,97 @@ end
 --------------------------------------------------
 local function get_pools()
     if not CACHED_POOLS then
+        local editions, edition_weights = build_edition_pool()
         CACHED_POOLS = {
             seals = build_seal_pool(),
             enhancements = build_enhancement_pool(),
-            editions = build_edition_pool()
+            editions = editions,
+            edition_weights = edition_weights
         }
     end
     return CACHED_POOLS
 end
 
 --------------------------------------------------
--- APPLY TO CARDS
+-- WEIGHTED EDITION SELECTION
 --------------------------------------------------
-local function apply_card_modifiers(card)
-    if not card or not card.set_edition then return end
-
+local function select_weighted_edition()
     local pools = get_pools()
-
-    local edition = inherit_modifier("edition") or rand(pools.editions)
-    if math.random() < 0.2 then edition = rand(pools.editions) end
-
-    local seal = inherit_modifier("seal") or rand(pools.seals)
-    if math.random() < 0.3 then seal = rand(pools.seals) end
-
-    local enhancement = inherit_modifier("enhancement") or rand(pools.enhancements)
-    if math.random() < 0.4 then enhancement = rand(pools.enhancements) end
-
-    if edition then card:set_edition({[edition] = true}, true, true) end
-    if seal then card:set_seal(seal, true) end
-    if enhancement and G.P_CENTERS[enhancement] then
-        card:set_ability(G.P_CENTERS[enhancement], true, true)
+    if pools.edition_weights and next(pools.edition_weights) then
+        return weighted_random(pools.edition_weights)
     end
-
-    propagate_modifiers(edition, seal, enhancement)
+    return rand(pools.editions)
 end
 
 --------------------------------------------------
--- APPLY TO JOKERS
+-- APPLY TO CARDS (Enhanced)
+--------------------------------------------------
+local function apply_card_modifiers(card)
+    if not card or not card.set_edition then return false end
+
+    local pools = get_pools()
+    local streak_bonus = get_streak_bonus()
+
+    -- Edition selection with weighted pools
+    local edition = inherit_modifier("edition")
+    if math.random() < (CONFIG.edition_override_chance + streak_bonus) then
+        edition = select_weighted_edition()
+    end
+    edition = edition or select_weighted_edition()
+
+    -- Seal selection
+    local seal = inherit_modifier("seal")
+    if math.random() < (CONFIG.seal_override_chance + streak_bonus) then
+        seal = rand(pools.seals)
+    end
+    seal = seal or rand(pools.seals)
+
+    -- Enhancement selection
+    local enhancement = inherit_modifier("enhancement")
+    if math.random() < (CONFIG.enhancement_override_chance + streak_bonus) then
+        enhancement = rand(pools.enhancements)
+    end
+    enhancement = enhancement or rand(pools.enhancements)
+
+    -- Apply modifiers
+    local success = false
+    if edition then
+        local ok = pcall(function()
+            card:set_edition({[edition] = true}, true, true)
+        end)
+        success = success or ok
+    end
+
+    if seal then
+        local ok = pcall(function()
+            card:set_seal(seal, true)
+        end)
+        success = success or ok
+    end
+
+    if enhancement and G.P_CENTERS[enhancement] then
+        local ok = pcall(function()
+            card:set_ability(G.P_CENTERS[enhancement], true, true)
+        end)
+        success = success or ok
+    end
+
+    if success then
+        propagate_modifiers(edition, seal, enhancement)
+        track_mutation(edition, seal, enhancement)
+        update_streak(true)
+        check_combo(edition, seal, enhancement)
+        debug_log("Card mutated:", edition, seal, enhancement)
+    end
+
+    return success
+end
+
+--------------------------------------------------
+-- APPLY TO JOKERS (Enhanced)
 --------------------------------------------------
 local function apply_joker_modifiers(joker)
-    if not joker or joker.edition then return end
+    if not joker or joker.edition then return false end
 
     local dominated = {
         j_perkeo = true, j_cry_perkeo = true,
@@ -212,29 +430,42 @@ local function apply_joker_modifiers(joker)
     }
 
     if joker.config and joker.config.center and dominated[joker.config.center.key] then
-        return
+        return false
     end
 
-    local editions = get_pools().editions
+    local streak_bonus = get_streak_bonus()
 
-    -- Break inheritance 50% of the time
+    -- Break inheritance with adjusted chance
     local edition = inherit_modifier("edition")
-    if math.random() < 0.5 then edition = nil end
+    if math.random() < (CONFIG.joker_inheritance_break_chance - streak_bonus) then
+        edition = nil
+    end
 
-    edition = edition or rand(editions)
-    if math.random() < 0.3 then edition = rand(editions) end
+    edition = edition or select_weighted_edition()
+    if math.random() < CONFIG.joker_edition_override_chance then
+        edition = select_weighted_edition()
+    end
 
     local ok = pcall(function()
         joker:set_edition({[edition] = true}, true, true)
     end)
 
-    if ok then propagate_modifiers(edition, nil, nil) end
+    if ok then
+        propagate_modifiers(edition, nil, nil)
+        track_mutation(edition, nil, nil)
+        update_streak(true)
+        debug_log("Joker mutated:", edition)
+    end
+
+    return ok
 end
 
 local function get_joker_mutation_chance()
-    -- Mutation chance = base + min(memory_size * scaling, max_bonus)
-    local memory_bonus = math.min(#PROPAGATED_MODIFIERS * JOKER_MUTATION_MEMORY_SCALING, JOKER_MUTATION_MAX_BONUS)
-    return JOKER_MUTATION_BASE_CHANCE + memory_bonus
+    local memory_bonus = math.min(
+        #PROPAGATED_MODIFIERS * CONFIG.joker_mutation_memory_scaling,
+        CONFIG.joker_mutation_max_bonus
+    )
+    return CONFIG.joker_mutation_base_chance + memory_bonus + get_streak_bonus()
 end
 
 local function apply_hand_resonance()
@@ -242,11 +473,17 @@ local function apply_hand_resonance()
 
     local mutated = 0
     for _, card in ipairs(G.hand.cards) do
-        if mutated >= HAND_RESONANCE_MAX_CARDS then break end
-        if card.ability and card.ability.set == CARD_SET_DEFAULT and math.random() < HAND_RESONANCE_CHANCE then
-            apply_card_modifiers(card)
-            mutated = mutated + 1
+        if mutated >= CONFIG.hand_resonance_max_cards then break end
+        local adjusted_chance = CONFIG.hand_resonance_chance + get_streak_bonus()
+        if card.ability and card.ability.set == CARD_SET_DEFAULT and math.random() < adjusted_chance then
+            if apply_card_modifiers(card) then
+                mutated = mutated + 1
+            end
         end
+    end
+
+    if mutated == 0 then
+        update_streak(false)
     end
 end
 
@@ -274,6 +511,7 @@ CardSleeves.Sleeve {
             "{C:attention}evolving modifiers{}",
             "Shop Jokers gain random {C:edition}Editions{}",
             "{C:attention}Edition{}, {C:attention}Seal{}, {C:attention}Enhancement{} guaranteed",
+            "{C:green}Streak system{} boosts mutation rates",
             "{C:inactive}(Stone enhancement blacklisted){}"
         }
     },
@@ -285,6 +523,15 @@ CardSleeves.Sleeve {
     apply = function(self)
         PROPAGATED_MODIFIERS = {}
         CACHED_POOLS = nil
+        EVOLUTION_STATS = {
+            total_mutations = 0,
+            current_streak = 0,
+            best_streak = 0,
+            combos_triggered = 0,
+            editions_applied = {},
+            seals_applied = {},
+            enhancements_applied = {}
+        }
 
         if not G.GAME.entropy_hooks_applied then
             G.GAME.entropy_hooks_applied = true
@@ -306,24 +553,28 @@ CardSleeves.Sleeve {
     end,
 
     calculate = function(self, sleeve, context)
-
         -- FAST END-OF-ROUND MUTATION + BURST ANIMATION
         if context.end_of_round and not context.game_over then
             CACHED_POOLS = nil
             if G.discard and G.discard.cards then
+                local mutated_any = false
 
                 for _, card in ipairs(G.discard.cards) do
                     if card.ability and card.ability.set == CARD_SET_DEFAULT then
-                        apply_card_modifiers(card)
+                        if apply_card_modifiers(card) then
+                            mutated_any = true
+                        end
                     end
                 end
 
-                G.E_MANAGER:add_event(Event({
-                    func = function()
-                        G.hand:juice_up(0.4, 0.4)
-                        return true
-                    end
-                }))
+                if mutated_any then
+                    G.E_MANAGER:add_event(Event({
+                        func = function()
+                            G.hand:juice_up(0.4, 0.4)
+                            return true
+                        end
+                    }))
+                end
             end
         end
 
@@ -343,10 +594,18 @@ CardSleeves.Sleeve {
     end,
 
     loc_vars = function(self)
-        return {vars = {}}
+        local stats = get_evolution_stats()
+        return {vars = {
+            stats.total_mutations,
+            stats.current_streak,
+            stats.combos_triggered
+        }}
     end
 }
 
+--------------------------------------------------
+-- TEST EXPORTS
+--------------------------------------------------
 if rawget(_G, "__ENTROPY_TESTING") then
     _G.__ENTROPY_TEST_EXPORTS = {
         sanitize_editions_startup = sanitize_editions_startup,
@@ -360,17 +619,34 @@ if rawget(_G, "__ENTROPY_TESTING") then
         apply_hand_resonance = apply_hand_resonance,
         get_joker_mutation_chance = get_joker_mutation_chance,
         get_pools = get_pools,
+        get_evolution_stats = get_evolution_stats,
+        get_streak_bonus = get_streak_bonus,
+        update_streak = update_streak,
+        check_combo = check_combo,
+        weighted_random = weighted_random,
+        select_weighted_edition = select_weighted_edition,
         constants = {
-            propagation_history_limit = PROPAGATION_HISTORY_LIMIT
+            propagation_history_limit = CONFIG.propagation_history_limit
         },
+        config = CONFIG,
         reset_state = function()
             PROPAGATED_MODIFIERS = {}
             CACHED_POOLS = nil
+            EVOLUTION_STATS = {
+                total_mutations = 0,
+                current_streak = 0,
+                best_streak = 0,
+                combos_triggered = 0,
+                editions_applied = {},
+                seals_applied = {},
+                enhancements_applied = {}
+            }
         end,
         get_state = function()
             return {
                 propagated_count = #PROPAGATED_MODIFIERS,
-                cached_pools = CACHED_POOLS
+                cached_pools = CACHED_POOLS,
+                evolution_stats = EVOLUTION_STATS
             }
         end
     }
