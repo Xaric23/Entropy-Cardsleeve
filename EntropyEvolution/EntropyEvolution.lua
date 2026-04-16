@@ -228,7 +228,7 @@ local function apply_joker_modifiers(joker)
 end
 
 local function get_joker_mutation_chance()
-    local memory_bonus = math.min(JOKER_MUTATION_MEMORY_CAP, #PROPAGATED_MODIFIERS * JOKER_MUTATION_MEMORY_SCALING)
+    local memory_bonus = math.min(#PROPAGATED_MODIFIERS * JOKER_MUTATION_MEMORY_SCALING, JOKER_MUTATION_MEMORY_CAP)
     return JOKER_MUTATION_BASE_CHANCE + memory_bonus
 end
 
