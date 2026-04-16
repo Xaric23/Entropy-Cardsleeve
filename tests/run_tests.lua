@@ -43,7 +43,8 @@ end
 local function with_deterministic_random(fn)
     local original_random = math.random
     -- Deterministic values keep tests stable: choose first index for ranged calls,
-    -- a constant for single-bound calls, and always pass probability checks.
+    -- a constant for single-bound calls, and 0 for probability checks so
+    -- "math.random() < chance" behaves predictably for non-zero chances.
     math.random = function(a, b)
         if a and b then return a end
         if a then return 1 end
@@ -206,11 +207,13 @@ end)
 
 run_test("propagation history is capped", function()
     exports.reset_state()
-    for i = 1, 60 do
+    local history_limit = 50
+    local inserts = history_limit + 10
+    for i = 1, inserts do
         exports.propagate_modifiers("ed" .. i, "seal" .. i, "enh" .. i)
     end
 
-    assert_eq(exports.get_state().propagated_count, 50, "history limit should cap to 50")
+    assert_eq(exports.get_state().propagated_count, history_limit, "history limit should be enforced")
 end)
 
 run_test("joker mutation chance scales and caps", function()
@@ -256,6 +259,15 @@ run_test("joker modifiers skip dominated jokers", function()
     local joker = build_joker("j_perkeo")
     exports.apply_joker_modifiers(joker)
     assert_eq(joker.set_edition_calls, 0)
+end)
+
+run_test("joker modifiers can apply to non-dominated jokers", function()
+    exports.reset_state()
+    local joker = build_joker("j_not_dominated")
+    with_deterministic_random(function()
+        exports.apply_joker_modifiers(joker)
+    end)
+    assert_eq(joker.set_edition_calls, 1)
 end)
 
 run_test("sleeve apply wraps discard draw hook once", function()
