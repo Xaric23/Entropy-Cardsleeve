@@ -28,6 +28,14 @@ local function assert_eq(actual, expected, message)
     end
 end
 
+local function assert_approx_eq(actual, expected, epsilon, message)
+    if math.abs(actual - expected) > epsilon then
+        fail((message or "values are not approximately equal")
+            .. ": expected " .. tostring(expected)
+            .. ", got " .. tostring(actual))
+    end
+end
+
 local function run_test(name, fn)
     io.write("TEST ", name, " ... ")
     local ok, err = pcall(fn)
@@ -42,9 +50,6 @@ end
 
 local function with_deterministic_random(fn)
     local original_random = math.random
-    -- Deterministic values keep tests stable: choose first index for ranged calls,
-    -- return 1 for single-bound calls, and 0 for probability checks so
-    -- "math.random() < chance" is true whenever chance > 0.
     math.random = function(a, b)
         if a and b then return a end
         if a then return 1 end
@@ -246,24 +251,19 @@ end)
 run_test("joker mutation chance scales and caps", function()
     exports.reset_state()
 
-    local function assert_approx_eq(actual, expected, epsilon, message)
-        if math.abs(actual - expected) > epsilon then
-            error((message or "values are not approximately equal")
-                .. ": expected " .. tostring(expected)
-                .. ", got " .. tostring(actual))
-        end
-    end
-
+    -- Base chance is 0.15
     assert_approx_eq(exports.get_joker_mutation_chance(), 0.15, 1e-9, "initial mutation chance should match")
 
     for i = 1, 25 do
         exports.propagate_modifiers("ed", "seal", "enh")
     end
+    -- 0.15 + min(25 * 0.004, 0.2) = 0.15 + 0.1 = 0.25
     assert_approx_eq(exports.get_joker_mutation_chance(), 0.25, 1e-9, "mutation chance should scale after propagation")
 
     for i = 1, 200 do
         exports.propagate_modifiers("ed", "seal", "enh")
     end
+    -- Capped at propagation_history_limit (50), so 0.15 + 0.2 = 0.35
     assert_approx_eq(exports.get_joker_mutation_chance(), 0.35, 1e-9, "mutation chance should cap at the maximum")
 end)
 
@@ -328,6 +328,78 @@ run_test("sleeve apply wraps discard draw hook once", function()
     assert_eq(result, "orig:x")
     assert_eq(card.set_edition_calls, 1, "discard hook should mutate default discard cards")
     assert_true(wrapped_once == wrapped_twice, "hook should not be re-wrapped")
+end)
+
+-- NEW TESTS FOR v1.1.0 FEATURES
+
+run_test("streak system increases on success", function()
+    exports.reset_state()
+    local initial_stats = exports.get_evolution_stats()
+    assert_eq(initial_stats.current_streak, 0, "initial streak should be 0")
+
+    exports.update_streak(true)
+    local stats = exports.get_evolution_stats()
+    assert_eq(stats.current_streak, 1, "streak should increase to 1")
+
+    exports.update_streak(true)
+    stats = exports.get_evolution_stats()
+    assert_eq(stats.current_streak, 2, "streak should increase to 2")
+end)
+
+run_test("streak bonus is capped", function()
+    exports.reset_state()
+
+    -- Build up streak to max
+    for i = 1, 20 do
+        exports.update_streak(true)
+    end
+
+    local bonus = exports.get_streak_bonus()
+    -- Config max is 0.15, streak_bonus_per_level is 0.02
+    assert_true(bonus <= 0.15, "streak bonus should be capped at max")
+end)
+
+run_test("weighted random returns valid keys", function()
+    local weights = { a = 50, b = 30, c = 20 }
+    local result = exports.weighted_random(weights)
+    assert_true(result == "a" or result == "b" or result == "c", "weighted_random should return valid key")
+end)
+
+run_test("combo system detects matching combos", function()
+    exports.reset_state()
+    local initial_stats = exports.get_evolution_stats()
+    assert_eq(initial_stats.combos_triggered, 0, "initial combos should be 0")
+
+    -- Trigger polychrome + Gold combo
+    local bonus = exports.check_combo("polychrome", "Gold", nil)
+    assert_eq(bonus, 1.5, "polychrome + Gold should give 1.5x bonus")
+
+    local stats = exports.get_evolution_stats()
+    assert_eq(stats.combos_triggered, 1, "combos_triggered should increment")
+end)
+
+run_test("combo system returns 1.0 for non-matching", function()
+    exports.reset_state()
+    local bonus = exports.check_combo("foil", "Blue", "m_bonus")
+    assert_eq(bonus, 1.0, "non-matching combo should return 1.0")
+end)
+
+run_test("evolution stats track mutations", function()
+    exports.reset_state()
+    local card = build_card("Default")
+
+    with_deterministic_random(function()
+        exports.apply_card_modifiers(card)
+    end)
+
+    local stats = exports.get_evolution_stats()
+    assert_true(stats.total_mutations >= 1, "total_mutations should be tracked")
+end)
+
+run_test("config values are accessible", function()
+    assert_true(exports.config ~= nil, "config should be exposed")
+    assert_eq(exports.config.joker_mutation_base_chance, 0.15, "default base chance should be 0.15")
+    assert_eq(exports.config.streak_max_bonus, 0.15, "default streak max should be 0.15")
 end)
 
 io.write(string.format("\nPassed: %d  Failed: %d\n", results.passed, results.failed))
