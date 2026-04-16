@@ -98,7 +98,10 @@ local function build_enhancement_pool()
 
     if G.P_CENTER_POOLS and G.P_CENTER_POOLS.Enhanced then
         for _, center in ipairs(G.P_CENTER_POOLS.Enhanced) do
-            if not dominated[center.key] then
+            if type(center) == "table"
+            and type(center.key) == "string"
+            and not dominated[center.key]
+            then
                 table.insert(enhancements, center.key)
             end
         end
