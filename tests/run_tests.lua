@@ -1,4 +1,14 @@
-local repo_root = "/home/runner/work/Entropy-Cardsleeve/Entropy-Cardsleeve"
+local script_path = debug.getinfo(1, "S").source:sub(2)
+if script_path:sub(1, 1) ~= "/" then
+    local pwd_handle = io.popen("pwd")
+    local cwd = pwd_handle and pwd_handle:read("*l") or ""
+    if pwd_handle then pwd_handle:close() end
+    script_path = cwd .. "/" .. script_path
+end
+local repo_root = script_path:match("^(.*)/tests/run_tests%.lua$")
+if not repo_root then
+    error("Unable to determine repository root from script path: " .. script_path)
+end
 local target_file = repo_root .. "/EntropyEvolution/EntropyEvolution.lua"
 
 local results = { passed = 0, failed = 0 }
@@ -28,6 +38,21 @@ local function run_test(name, fn)
     else
         results.failed = results.failed + 1
         io.write("FAIL\n", err, "\n")
+    end
+end
+
+local function with_deterministic_random(fn)
+    local original_random = math.random
+    math.random = function(a, b)
+        if a and b then return a end
+        if a then return 1 end
+        return 0
+    end
+
+    local ok, err = pcall(fn)
+    math.random = original_random
+    if not ok then
+        error(err, 0)
     end
 end
 
@@ -209,16 +234,9 @@ run_test("hand resonance mutates at most two default cards", function()
         build_card("Joker")
     }
 
-    local original_random = math.random
-    math.random = function(a, b)
-        if a and b then return a end
-        if a then return 1 end
-        return 0
-    end
-
-    exports.apply_hand_resonance()
-
-    math.random = original_random
+    with_deterministic_random(function()
+        exports.apply_hand_resonance()
+    end)
 
     local mutated_default = 0
     for i = 1, 3 do
@@ -245,20 +263,16 @@ run_test("sleeve apply wraps discard draw hook once", function()
     G.discard.cards = { card }
     G.GAME.entropy_hooks_applied = nil
 
-    local original_random = math.random
-    math.random = function(a, b)
-        if a and b then return a end
-        if a then return 1 end
-        return 0
-    end
-
-    __SLEEVE_DEF.apply(__SLEEVE_DEF)
-    local wrapped_once = G.FUNCS.draw_from_discard_to_hand
-    local result = wrapped_once("x")
-    __SLEEVE_DEF.apply(__SLEEVE_DEF)
-    local wrapped_twice = G.FUNCS.draw_from_discard_to_hand
-
-    math.random = original_random
+    local wrapped_once
+    local wrapped_twice
+    local result
+    with_deterministic_random(function()
+        __SLEEVE_DEF.apply(__SLEEVE_DEF)
+        wrapped_once = G.FUNCS.draw_from_discard_to_hand
+        result = wrapped_once("x")
+        __SLEEVE_DEF.apply(__SLEEVE_DEF)
+        wrapped_twice = G.FUNCS.draw_from_discard_to_hand
+    end)
 
     assert_eq(result, "orig:x")
     assert_eq(card.set_edition_calls, 1, "discard hook should mutate default discard cards")
