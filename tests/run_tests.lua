@@ -402,6 +402,19 @@ run_test("config values are accessible", function()
     assert_eq(exports.config.streak_max_bonus, 0.15, "default streak max should be 0.15")
 end)
 
+run_test("lovely manifest defines patches field", function()
+    local manifest_path = repo_root .. "/EntropyEvolution/lovely.toml"
+    local file = io.open(manifest_path, "r")
+    assert_true(file ~= nil, "expected lovely.toml to exist")
+    local content = file:read("*a")
+    file:close()
+
+    assert_true(
+        content:match("^patches%s*=") ~= nil or content:match("\npatches%s*=") ~= nil or content:match("%[%[patches%]%]") ~= nil,
+        "lovely.toml must define a patches field/table for lovely-injector"
+    )
+end)
+
 io.write(string.format("\nPassed: %d  Failed: %d\n", results.passed, results.failed))
 if results.failed > 0 then
     os.exit(1)
