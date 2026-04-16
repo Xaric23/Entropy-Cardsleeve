@@ -5,7 +5,7 @@
 	"description": "Adds the Entropy Sleeve - discarded cards transform with evolving modifiers, shop Jokers gain random editions.",
 	"prefix": "entropy",
 	"main_file": "EntropyEvolution.lua",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"priority": 1,
 	"dependencies": [
 		"Steamodded (>=1.0.0~ALPHA-1424a)",
