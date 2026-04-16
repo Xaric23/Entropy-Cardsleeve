@@ -187,6 +187,21 @@ run_test("enhancement pool excludes stone enhancement", function()
     assert_eq(enhancements[2], "m_mult")
 end)
 
+run_test("enhancement pool ignores invalid entries", function()
+    G.P_CENTER_POOLS.Enhanced = {
+        { key = "m_bonus" },
+        { key = false },
+        {},
+        { key = "m_stone" },
+        { key = "m_mult" }
+    }
+
+    local enhancements = exports.build_enhancement_pool()
+    assert_eq(#enhancements, 2)
+    assert_eq(enhancements[1], "m_bonus")
+    assert_eq(enhancements[2], "m_mult")
+end)
+
 run_test("edition pool includes validated and base editions", function()
     G.P_CENTER_POOLS.Edition = {
         { key = "e_holo", e_switch_point = 1 },
