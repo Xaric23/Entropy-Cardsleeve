@@ -63,10 +63,11 @@ local CACHED_POOLS = nil
 local EDITIONS_BASE = {"foil", "holo", "polychrome", "negative"}
 local PROPAGATION_HISTORY_LIMIT = 50
 local JOKER_MUTATION_BASE_CHANCE = 0.15
-local JOKER_MUTATION_MEMORY_SCALING = 0.005
+local JOKER_MUTATION_MEMORY_SCALING = 0.004
 local JOKER_MUTATION_MEMORY_CAP = 0.2
 local HAND_RESONANCE_CHANCE = 0.12
 local HAND_RESONANCE_MAX_CARDS = 2
+local CARD_SET_DEFAULT = "Default"
 
 --------------------------------------------------
 -- HELPERS
@@ -238,7 +239,7 @@ local function apply_hand_resonance()
     local mutated = 0
     for _, card in ipairs(G.hand.cards) do
         if mutated >= HAND_RESONANCE_MAX_CARDS then break end
-        if card.ability and card.ability.set == "Default" and math.random() < HAND_RESONANCE_CHANCE then
+        if card.ability and card.ability.set == CARD_SET_DEFAULT and math.random() < HAND_RESONANCE_CHANCE then
             apply_card_modifiers(card)
             mutated = mutated + 1
         end
@@ -289,7 +290,7 @@ CardSleeves.Sleeve {
                 G.FUNCS.draw_from_discard_to_hand = function(e)
                     if G.discard and G.discard.cards then
                         for _, card in ipairs(G.discard.cards) do
-                            if card.ability and card.ability.set == "Default" then
+                            if card.ability and card.ability.set == CARD_SET_DEFAULT then
                                 apply_card_modifiers(card)
                             end
                         end
@@ -308,7 +309,7 @@ CardSleeves.Sleeve {
             if G.discard and G.discard.cards then
 
                 for _, card in ipairs(G.discard.cards) do
-                    if card.ability and card.ability.set == "Default" then
+                    if card.ability and card.ability.set == CARD_SET_DEFAULT then
                         apply_card_modifiers(card)
                     end
                 end
