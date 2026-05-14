@@ -310,6 +310,7 @@ run_test("sleeve apply wraps discard draw hook once", function()
     exports.reset_state()
     assert_true(__SLEEVE_DEF ~= nil, "sleeve definition missing")
 
+    _G.ChaosSystem = nil
     local card = build_card("Default")
     G.discard.cards = { card }
     G.GAME.entropy_hooks_applied = nil
@@ -328,6 +329,29 @@ run_test("sleeve apply wraps discard draw hook once", function()
     assert_eq(result, "orig:x")
     assert_eq(card.set_edition_calls, 1, "discard hook should mutate default discard cards")
     assert_true(wrapped_once == wrapped_twice, "hook should not be re-wrapped")
+end)
+
+run_test("sleeve apply contributes ChaosEntropy start entropy once", function()
+    exports.reset_state()
+    assert_true(__SLEEVE_DEF ~= nil, "sleeve definition missing")
+
+    G.GAME = {}
+    _G.ChaosSystem = {
+        entropy = 0,
+        addEntropy = function(amount)
+            ChaosSystem.entropy = ChaosSystem.entropy + amount
+            G.GAME.chaos_entropy = ChaosSystem.entropy
+        end
+    }
+
+    __SLEEVE_DEF.apply(__SLEEVE_DEF)
+    __SLEEVE_DEF.apply(__SLEEVE_DEF)
+
+    assert_eq(G.GAME.chaos_start, exports.constants.chaos_entropy_start, "chaos_start should be applied once")
+    assert_eq(ChaosSystem.entropy, exports.constants.chaos_entropy_start, "ChaosSystem entropy should be applied once")
+    assert_eq(G.GAME.chaos_entropy, exports.constants.chaos_entropy_start, "chaos entropy should sync to G.GAME")
+
+    _G.ChaosSystem = nil
 end)
 
 -- NEW TESTS FOR v1.1.0 FEATURES

@@ -9,6 +9,7 @@ A Balatro mod that adds the **Entropy Sleeve** - discarded cards transform with 
 - **Modifier Inheritance**: New mutations inherit traits from previous ones (propagation system)
 - **Joker Editions**: Shop Jokers automatically gain random editions
 - **Hand Resonance**: Cards in your hand may spontaneously mutate
+- **Chaos Entropy Compatibility**: When Chaos Entropy is installed, this sleeve contributes +5 starting entropy and can count as the entropy sleeve for Trifecta detection
 
 ### New in v1.1.0
 
@@ -87,6 +88,10 @@ local CONFIG = {
 
 - **Stone Enhancement** (`m_stone`): Excluded to prevent negative synergies
 - **Dominated Jokers**: Perkeo, Caino, Triboulet, Yorick, Chicot (excluded from edition changes)
+
+## Compatibility
+
+- **Chaos Entropy**: This sleeve sets Chaos Entropy's run entropy when both mods are installed. Chaos Entropy should recognize `sleeve_entropy_entropy_evolution` as an Entropy Sleeve for Chaos Trifecta runs.
 
 ## Tests
 
