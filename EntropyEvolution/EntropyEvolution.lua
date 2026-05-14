@@ -126,6 +126,7 @@ local EVOLUTION_STATS = {
 
 local EDITIONS_BASE = {"foil", "holo", "polychrome", "negative"}
 local CARD_SET_DEFAULT = "Default"
+local CHAOS_ENTROPY_START = 5
 
 --------------------------------------------------
 -- HELPERS
@@ -159,6 +160,29 @@ end
 
 local function clamp(value, min_val, max_val)
     return math.max(min_val, math.min(max_val, value))
+end
+
+local function is_chaos_entropy_loaded()
+    return rawget(_G, "ChaosSystem") ~= nil or rawget(_G, "ChaosEntropy") ~= nil
+end
+
+local function apply_chaos_entropy_compat()
+    if not is_chaos_entropy_loaded() or not G or not G.GAME then return end
+    if G.GAME.entropy_evolution_chaos_applied then return end
+
+    G.GAME.entropy_evolution_chaos_applied = true
+    G.GAME.chaos_start = (G.GAME.chaos_start or 0) + CHAOS_ENTROPY_START
+
+    if ChaosSystem and ChaosSystem.addEntropy then
+        ChaosSystem.addEntropy(CHAOS_ENTROPY_START)
+    elseif ChaosSystem and ChaosSystem.setEntropy then
+        ChaosSystem.setEntropy((ChaosSystem.entropy or 0) + CHAOS_ENTROPY_START)
+    elseif ChaosSystem then
+        ChaosSystem.entropy = (ChaosSystem.entropy or 0) + CHAOS_ENTROPY_START
+        G.GAME.chaos_entropy = ChaosSystem.entropy
+    end
+
+    debug_log("ChaosEntropy compatibility applied: +" .. CHAOS_ENTROPY_START .. " entropy")
 end
 
 --------------------------------------------------
@@ -533,6 +557,8 @@ CardSleeves.Sleeve {
             enhancements_applied = {}
         }
 
+        apply_chaos_entropy_compat()
+
         if not G.GAME.entropy_hooks_applied then
             G.GAME.entropy_hooks_applied = true
 
@@ -625,8 +651,11 @@ if rawget(_G, "__ENTROPY_TESTING") then
         check_combo = check_combo,
         weighted_random = weighted_random,
         select_weighted_edition = select_weighted_edition,
+        is_chaos_entropy_loaded = is_chaos_entropy_loaded,
+        apply_chaos_entropy_compat = apply_chaos_entropy_compat,
         constants = {
-            propagation_history_limit = CONFIG.propagation_history_limit
+            propagation_history_limit = CONFIG.propagation_history_limit,
+            chaos_entropy_start = CHAOS_ENTROPY_START
         },
         config = CONFIG,
         reset_state = function()
